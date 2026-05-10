@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Django
+db.sqlite3
+*.log
+
+# Environment variables (VERY IMPORTANT)
+.env
+.env.*
+
+# Static / media files (generated in production)
+staticfiles/
+media/
+
+# IDE / editors
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# MySQL dumps (if you ever export DB)
+*.sql
