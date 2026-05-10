@@ -54,9 +54,13 @@ SECRET_KEY = env('DJANGO_SECRET_KEY', 'dev-only-change-me')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-APP_SCHEME = env("APP_SCHEME", "http")
-APP_DOMAIN = env("APP_DOMAIN", "127.0.0.1:8000")
+APP_SCHEME = env("APP_SCHEME", "https")
+APP_DOMAIN = env("APP_DOMAIN", "ledgerpro.com")
 APP_HOST = APP_DOMAIN.split(":", 1)[0]
+
+DEBUG = False
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 ALLOWED_HOSTS = [
     "ledgerpro.com",
