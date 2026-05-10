@@ -12,21 +12,67 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _load_dotenv(dotenv_path):
+    if not dotenv_path.exists():
+        
+        return
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+
+def env(name, default=None, aliases=()):
+    for key in (name, *aliases):
+        value = os.getenv(key)
+        if value not in (None, ""):
+            return value
+    return default
+
+
+_load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-only-change-me')
+SECRET_KEY = env('DJANGO_SECRET_KEY', 'dev-only-change-me')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+APP_SCHEME = env("APP_SCHEME", "http")
+APP_DOMAIN = env("APP_DOMAIN", "127.0.0.1:8000")
+APP_HOST = APP_DOMAIN.split(":", 1)[0]
+
+ALLOWED_HOSTS = [
+    "ledgerpro.com",
+    "www.ledgerpro.com",
+    ".railway.app",
+    "127.0.0.1",
+    "localhost",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://ledgerpro.com",
+    "https://www.ledgerpro.com",
+    "https://*.railway.app",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+]
 
 
 # Application definition
@@ -48,11 +94,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'allauth.account.middleware.AccountMiddleware',
+    'main.middleware.TwoFactorEnforcementMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -70,6 +118,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'main.context_processors.google_oauth',
             ],
         },
     },
@@ -87,12 +136,12 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 # MySQL configuration; environment variables make it easy to change credentials
 DATABASES = {
     'default': {
-        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.mysql'),
-        'NAME': os.getenv('DB_NAME', 'main_db'),
-        'USER': os.getenv('DB_USER', 'root'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', '127.0.0.1'),
-        'PORT': os.getenv('DB_PORT', '3306'),
+        'ENGINE': env('DB_ENGINE', 'django.db.backends.mysql', aliases=('MYSQL_ENGINE',)),
+        'NAME': env('DB_NAME', 'main_db', aliases=('MYSQL_DATABASE',)),
+        'USER': env('DB_USER', 'root', aliases=('MYSQL_USER',)),
+        'PASSWORD': env('DB_PASSWORD', '', aliases=('MYSQL_PASSWORD',)),
+        'HOST': env('DB_HOST', '127.0.0.1', aliases=('MYSQL_HOST',)),
+        'PORT': env('DB_PORT', '3306', aliases=('MYSQL_PORT',)),
     }
 }
 
@@ -133,11 +182,13 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # allauth / auth configuration
 SITE_ID = 1
 LOGIN_REDIRECT_URL = '/home/'
 LOGOUT_REDIRECT_URL = '/login/'
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = APP_SCHEME
 ACCOUNT_LOGIN_METHODS = {'email'}
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 ACCOUNT_EMAIL_VERIFICATION = 'none'
@@ -145,6 +196,9 @@ ACCOUNT_AUTHENTICATED_LOGIN_REDIRECTS = True
 ACCOUNT_LOGOUT_REDIRECT_URL = '/login/'
 SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_QUERY_EMAIL = True
+SOCIALACCOUNT_LOGIN_ON_GET = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 SOCIALACCOUNT_ADAPTER = 'main.adapters.CustomSocialAccountAdapter'
 
 AUTHENTICATION_BACKENDS = [
@@ -158,19 +212,27 @@ SOCIALACCOUNT_PROVIDERS = {
         'AUTH_PARAMS': {'access_type': 'online'},
         'VERIFIED_EMAIL': True,
         'APP': {
-            'client_id': os.getenv('GOOGLE_CLIENT_ID', ''),
-            'secret': os.getenv('GOOGLE_CLIENT_SECRET', ''),
+            'client_id': env('GOOGLE_CLIENT_ID', ''),
+            'secret': env('GOOGLE_CLIENT_SECRET', ''),
             'key': '',
         },
     }
 }
 
+# Keep the allauth OAuth state in the same browser session for local development.
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = APP_SCHEME == 'https'
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = APP_SCHEME == 'https'
+ENFORCE_2FA = env('ENFORCE_2FA', 'False').lower() in {'true', '1', 'yes', 'on'}
+
 # Email backend (Gmail SMTP example)
 # Use an App Password if 2FA is enabled on Gmail.
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in {'true', '1', 'yes'}
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'your-email@gmail.com')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'your-app-password')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+EMAIL_HOST = env('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(env('EMAIL_PORT', 587))
+EMAIL_USE_TLS = env('EMAIL_USE_TLS', 'True').lower() in {'true', '1', 'yes'}
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+TOTP_ISSUER_NAME = env('TOTP_ISSUER_NAME', 'LedgerPro')
