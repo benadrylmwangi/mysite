@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 import os
 from pathlib import Path
+import dj_database_url
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -42,6 +43,20 @@ def env(name, default=None, aliases=()):
     return default
 
 
+def env_bool(name, default=False, aliases=()):
+    value = env(name, aliases=aliases)
+    if value in (None, ""):
+        return default
+    return value.lower() in {"true", "1", "yes", "on"}
+
+
+def env_list(name, default=(), aliases=()):
+    value = env(name, aliases=aliases)
+    if not value:
+        return list(default)
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 _load_dotenv(BASE_DIR / ".env")
 
 
@@ -52,31 +67,37 @@ _load_dotenv(BASE_DIR / ".env")
 SECRET_KEY = env('DJANGO_SECRET_KEY', 'dev-only-change-me')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+IS_RAILWAY = bool(env("RAILWAY_ENVIRONMENT"))
+DEBUG = env_bool("DEBUG", default=not IS_RAILWAY)
 
-APP_SCHEME = env("APP_SCHEME", "https")
-APP_DOMAIN = env("APP_DOMAIN", "ledgerpro.com")
+APP_SCHEME = env("APP_SCHEME", "https" if IS_RAILWAY else "http")
+APP_DOMAIN = env("APP_DOMAIN", "ledgerpro.com" if IS_RAILWAY else "127.0.0.1:8000")
 APP_HOST = APP_DOMAIN.split(":", 1)[0]
 
-DEBUG = False
-
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=False)
+SECURE_HSTS_SECONDS = int(env("SECURE_HSTS_SECONDS", 0))
 
-ALLOWED_HOSTS = [
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", default=[
     "ledgerpro.com",
     "www.ledgerpro.com",
     ".railway.app",
     "127.0.0.1",
     "localhost",
-]
+])
+if APP_HOST and APP_HOST not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(APP_HOST)
 
-CSRF_TRUSTED_ORIGINS = [
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", default=[
     "https://ledgerpro.com",
     "https://www.ledgerpro.com",
     "https://*.railway.app",
     "http://127.0.0.1:8000",
     "http://localhost:8000",
-]
+])
+app_origin = f"{APP_SCHEME}://{APP_DOMAIN}"
+if app_origin not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(app_origin)
 
 
 # Application definition
@@ -137,17 +158,27 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# MySQL configuration; environment variables make it easy to change credentials
-DATABASES = {
-    'default': {
-        'ENGINE': env('DB_ENGINE', 'django.db.backends.mysql', aliases=('MYSQL_ENGINE',)),
-        'NAME': env('DB_NAME', 'main_db', aliases=('MYSQL_DATABASE',)),
-        'USER': env('DB_USER', 'root', aliases=('MYSQL_USER',)),
-        'PASSWORD': env('DB_PASSWORD', '', aliases=('MYSQL_PASSWORD',)),
-        'HOST': env('DB_HOST', '127.0.0.1', aliases=('MYSQL_HOST',)),
-        'PORT': env('DB_PORT', '3306', aliases=('MYSQL_PORT',)),
+DATABASE_URL = env("DATABASE_URL", aliases=("MYSQL_URL", "MYSQL_PUBLIC_URL"))
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=env_bool("DB_SSL_REQUIRE", default=False),
+        )
     }
-}
+else:
+    # MySQL configuration; environment variables make it easy to change credentials.
+    DATABASES = {
+        'default': {
+            'ENGINE': env('DB_ENGINE', 'django.db.backends.mysql', aliases=('MYSQL_ENGINE',)),
+            'NAME': env('DB_NAME', 'main_db', aliases=('MYSQL_DATABASE',)),
+            'USER': env('DB_USER', 'root', aliases=('MYSQL_USER',)),
+            'PASSWORD': env('DB_PASSWORD', '', aliases=('MYSQL_PASSWORD',)),
+            'HOST': env('DB_HOST', '127.0.0.1', aliases=('MYSQL_HOST',)),
+            'PORT': env('DB_PORT', '3306', aliases=('MYSQL_PORT',)),
+        }
+    }
 
 
 
@@ -187,6 +218,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # allauth / auth configuration
 SITE_ID = 1
@@ -225,9 +257,9 @@ SOCIALACCOUNT_PROVIDERS = {
 
 # Keep the allauth OAuth state in the same browser session for local development.
 SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_SECURE = APP_SCHEME == 'https'
+SESSION_COOKIE_SECURE = env_bool('SESSION_COOKIE_SECURE', default=APP_SCHEME == 'https')
 CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SECURE = APP_SCHEME == 'https'
+CSRF_COOKIE_SECURE = env_bool('CSRF_COOKIE_SECURE', default=APP_SCHEME == 'https')
 ENFORCE_2FA = env('ENFORCE_2FA', 'False').lower() in {'true', '1', 'yes', 'on'}
 
 # Email backend (Gmail SMTP example)
