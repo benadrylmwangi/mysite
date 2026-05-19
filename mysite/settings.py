@@ -160,28 +160,16 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASE_URL = env("DATABASE_URL", aliases=("MYSQL_URL", "MYSQL_PUBLIC_URL"))
-if DATABASE_URL:
-    DATABASES = {
-        "default": dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=600,
-            ssl_require=env_bool("DB_SSL_REQUIRE", default=False),
-        )
-    }
-else:
-    # MySQL configuration; environment variables make it easy to change credentials.
-    DATABASES = {
-        'default': {
-            'ENGINE': env('DB_ENGINE', 'django.db.backends.mysql', aliases=('MYSQL_ENGINE',)),
-            'NAME': env('DB_NAME', 'main_db', aliases=('MYSQL_DATABASE',)),
-            'USER': env('DB_USER', 'root', aliases=('MYSQL_USER',)),
-            'PASSWORD': env('DB_PASSWORD', '', aliases=('MYSQL_PASSWORD',)),
-            'HOST': env('DB_HOST', '127.0.0.1', aliases=('MYSQL_HOST',)),
-            'PORT': env('DB_PORT', '3306', aliases=('MYSQL_PORT',)),
-        }
-    }
+import dj_database_url
+from decouple import config as env
 
+DATABASES = {
+    "default": dj_database_url.parse(
+        env("DATABASE_URL"),
+        conn_max_age=600,
+        ssl_require=True,
+    )
+}
 
 
 # Password validation
