@@ -81,8 +81,7 @@ SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", default=False)
 SECURE_HSTS_SECONDS = int(env("SECURE_HSTS_SECONDS", 0))
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", default=[
-    "mysite-production-735a.up.railway.app",
-    "mysite-production-735a.up.railway.app",
+    "https://mysite-production-735a.up.railway.app",
     ".railway.app",
     "127.0.0.1",
     "localhost",
@@ -93,6 +92,7 @@ if APP_HOST and APP_HOST not in ALLOWED_HOSTS:
 CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS", default=[
     "https://mysite-production-735a.up.railway.app",
     "https://mysite-production-735a.up.railway.app",
+    "https://www.mysite-production-735a.up.railway.app",
     "https://*.railway.app",
     "http://127.0.0.1:8000",
     "http://localhost:8000",
