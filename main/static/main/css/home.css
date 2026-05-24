@@ -6,7 +6,6 @@
     margin: 0 auto;
     background-attachment: fixed;
     background-repeat: repeat-x;
-    background-image: url("{% static 'main/images/dashboard-bg.png' %}");
     background-color: aqua;
     margin-left: +0px;
     height: 800px;
